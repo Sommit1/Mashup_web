@@ -1,0 +1,8 @@
+email-validator
+redis
+rq
+flask
+gunicorn
+yt-dlp
+pydub
+sendgrid
