@@ -5,34 +5,33 @@ import uuid
 import base64
 import zipfile
 import tempfile
+import shutil
 from pathlib import Path
 
-from flask import Flask, render_template, request, send_file, abort
+from flask import Flask, render_template, request, send_file
 from email_validator import validate_email, EmailNotValidError
 
 import yt_dlp
 from pydub import AudioSegment
 
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
-
+from sendgrid.helpers.mail import (
+    Mail, Attachment, FileContent, FileName, FileType, Disposition
+)
 
 app = Flask(__name__)
 
 # ----------------------------
-# Simple in-memory cache for ZIP download links
-# NOTE: On Render free, instance can restart -> links may stop working.
+# Download cache (Render uses ephemeral disk; links expire)
 # ----------------------------
 DOWNLOAD_CACHE_DIR = Path("/tmp/mashup_cache")
 DOWNLOAD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 DOWNLOAD_TTL_SECONDS = 20 * 60  # 20 minutes
-# token -> {"path": Path, "created": unix_ts, "filename": str}
-DOWNLOADS = {}
+DOWNLOADS = {}  # token -> {"path": Path, "created": ts, "filename": str}
 
 
 def cleanup_downloads():
-    """Remove expired cached zip files."""
     now = time.time()
     expired = [t for t, meta in DOWNLOADS.items() if now - meta["created"] > DOWNLOAD_TTL_SECONDS]
     for t in expired:
@@ -57,19 +56,23 @@ def sanitize_filename(name: str) -> str:
     return name or "mashup"
 
 
-def download_n_audios_by_search(query: str, n: int, out_dir: Path):
+def _yt_dlp_opts(out_dir: Path):
     """
-    Uses yt-dlp 'ytsearchN:' to fetch top N results.
-    Downloads as mp3 using ffmpeg.
+    yt-dlp options tuned for server stability.
+    Note: YouTube may still block cloud IPs sometimes.
     """
     outtmpl = str(out_dir / "%(id)s.%(ext)s")
-    ydl_opts = {
+    return {
         "format": "bestaudio/best",
         "outtmpl": outtmpl,
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "extractaudio": True,
+        "retries": 3,
+        "socket_timeout": 20,
+        # Helps in some cases (not guaranteed)
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
+        "http_headers": {"User-Agent": "Mozilla/5.0"},
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -77,8 +80,13 @@ def download_n_audios_by_search(query: str, n: int, out_dir: Path):
         }],
     }
 
-    search = f"ytsearch{n}:{query} official audio"
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+def download_n_audios_by_search(singer: str, n: int, out_dir: Path):
+    """
+    Uses ytsearchN to download top N results.
+    """
+    search = f"ytsearch{n}:{singer} official audio"
+    with yt_dlp.YoutubeDL(_yt_dlp_opts(out_dir)) as ydl:
         ydl.download([search])
 
     return sorted(out_dir.glob("*.mp3"))
@@ -101,6 +109,11 @@ def make_zip(file_path: Path, zip_path: Path):
 
 
 def send_zip_via_sendgrid(to_email: str, zip_path: Path):
+    """
+    Requires env vars:
+    - SENDGRID_API_KEY
+    - FROM_EMAIL   (must be verified in SendGrid: Single Sender or Domain Auth)
+    """
     api_key = os.getenv("SENDGRID_API_KEY", "").strip()
     from_email = os.getenv("FROM_EMAIL", "").strip()
     if not api_key or not from_email:
@@ -114,8 +127,8 @@ def send_zip_via_sendgrid(to_email: str, zip_path: Path):
     message = Mail(
         from_email=from_email,
         to_emails=to_email,
-        subject="Your Mashup ZIP file",
-        html_content="<p>Hi! Your mashup ZIP is attached.</p>"
+        subject="Mashup ZIP file",
+        html_content="<p>Your mashup ZIP is attached.</p>"
     )
 
     attachment = Attachment(
@@ -132,18 +145,13 @@ def send_zip_via_sendgrid(to_email: str, zip_path: Path):
 
 def cache_zip_for_download(zip_path: Path, display_name: str):
     """
-    Copy zip to /tmp cache and return a token-based download URL.
+    Copy zip into /tmp cache and return token.
     """
     cleanup_downloads()
     token = uuid.uuid4().hex
     target = DOWNLOAD_CACHE_DIR / f"{token}.zip"
-    # Copy zip into cache
     target.write_bytes(zip_path.read_bytes())
-    DOWNLOADS[token] = {
-        "path": target,
-        "created": time.time(),
-        "filename": display_name
-    }
+    DOWNLOADS[token] = {"path": target, "created": time.time(), "filename": display_name}
     return token
 
 
@@ -159,7 +167,7 @@ def index():
     y = safe_int(request.form.get("y"), 0)
     email = (request.form.get("email") or "").strip()
 
-    # Assignment validation
+    # ---- Assignment validations ----
     if not singer:
         return render_template("index.html", error="Singer name is required.")
     if n <= 0 or n > 20:
@@ -168,67 +176,64 @@ def index():
         return render_template("index.html", error="Duration (y) must be between 1 and 60 seconds.")
     if not email:
         return render_template("index.html", error="Email is required (as per assignment).")
-
     try:
         validate_email(email)
     except EmailNotValidError:
         return render_template("index.html", error="Invalid email format. Please enter a correct email.")
 
     tmp_root = Path(tempfile.mkdtemp(prefix="mashup_"))
+
     try:
         dl_dir = tmp_root / "downloads"
         dl_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download
+        # 1) Download audio
         try:
             mp3s = download_n_audios_by_search(singer, n, dl_dir)
         except Exception as e:
             return render_template(
                 "index.html",
-                error=("YouTube blocked downloads on the server (bot/sign-in check). "
-                       "This is common on cloud hosting. Try smaller n (5-10), or test locally. "
-                       f"Details: {str(e)[:220]}")
+                error=(
+                    "YouTube blocked downloads on the server (bot/sign-in check). "
+                    "This is common on cloud hosting. Try smaller n (5–10), or demo locally. "
+                    f"Details: {str(e)[:240]}"
+                )
             )
 
         if not mp3s:
             return render_template("index.html", error="No audios downloaded. Try another singer keyword.")
 
-        # Build mashup mp3
+        # 2) Build mashup mp3
         base = sanitize_filename(singer)
         out_mp3 = tmp_root / f"{base}_mashup.mp3"
         build_mashup(mp3s, y, out_mp3)
 
-        # Zip
+        # 3) Make ZIP
         out_zip = tmp_root / f"{base}_mashup.zip"
         make_zip(out_mp3, out_zip)
 
-        # Always create download link (extra backup)
+        # 4) Backup download link (always)
         token = cache_zip_for_download(out_zip, out_zip.name)
         download_url = f"/download/{token}"
 
-        # Try to email
+        # 5) Email ZIP
         try:
             send_zip_via_sendgrid(email, out_zip)
             return render_template(
                 "index.html",
-                success=f"Sent ZIP to: {email}",
+                success=f"✅ ZIP sent to: {email}",
                 download_url=download_url
             )
         except Exception as e:
-            # Email failed -> show download link
+            # Email failed -> still give download link
             return render_template(
                 "index.html",
-                error=f"Email failed, but ZIP is ready. Download using the link below. Reason: {str(e)[:220]}",
+                error=f"Email failed, but ZIP is ready. Download below. Reason: {str(e)[:240]}",
                 download_url=download_url
             )
 
     finally:
-        # Remove temp working folder (we already copied ZIP to /tmp cache)
-        try:
-            import shutil
-            shutil.rmtree(tmp_root, ignore_errors=True)
-        except:
-            pass
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
 
 @app.route("/download/<token>")
@@ -242,7 +247,6 @@ def download(token):
     if not p.exists():
         return "File not found (server restarted). Please generate again.", 404
 
-    # Make it download with original name
     return send_file(
         p,
         as_attachment=True,

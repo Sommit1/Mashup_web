@@ -16,9 +16,9 @@
       overflow:hidden;
     }
     .glow{
-      position:absolute; inset:-200px;
+      position:absolute; inset:-220px;
       background: conic-gradient(from 180deg, rgba(255,255,255,.06), rgba(255,255,255,0), rgba(255,255,255,.06));
-      filter: blur(40px);
+      filter: blur(50px);
       animation: spin 10s linear infinite;
       opacity:.7;
       pointer-events:none;
@@ -26,13 +26,15 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .card{
-      width:min(620px, 92vw);
+      width:min(640px, 92vw);
       background: rgba(20, 28, 60, .72);
       border:1px solid rgba(255,255,255,.14);
       border-radius:18px;
       padding:22px;
       box-shadow: 0 18px 50px rgba(0,0,0,.35);
       backdrop-filter: blur(10px);
+      position:relative;
+      z-index:1;
     }
     h1{ margin:0 0 8px; font-size:28px; }
     p{ margin:0 0 16px; opacity:.9; line-height:1.4; }
@@ -95,7 +97,10 @@
 
   <div class="card">
     <h1>Mashup Generator</h1>
-    <p>User must provide Singer name, number of videos, duration of each video and email id. Output is sent as ZIP.</p>
+    <p>
+      User must provide Singer name, number of videos, duration of each video and email id.
+      Output is sent as ZIP.
+    </p>
 
     <form method="POST">
       <label>Singer Name</label>
@@ -130,7 +135,7 @@
     {% endif %}
 
     <div class="note">
-      Note: On free cloud hosting, YouTube can block downloads (bot/sign-in check). Also, download link expires in ~20 minutes.
+      Note: On free cloud hosting, YouTube may block downloads (bot/sign-in check). Download link expires in ~20 minutes.
     </div>
   </div>
 </body>
