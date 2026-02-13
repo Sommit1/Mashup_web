@@ -1,159 +1,111 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mashup Generator</title>
   <style>
-    *{ box-sizing:border-box; }
+    :root { --card: rgba(18, 24, 55, .72); --border: rgba(255,255,255,.12); }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
     body{
-      margin:0;
-      min-height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color:#fff;
+      margin:0; min-height:100vh; display:grid; place-items:center; color:#fff;
+      background: radial-gradient(1200px 600px at 20% 20%, #6d28d9 0%, transparent 55%),
+                  radial-gradient(900px 600px at 80% 30%, #2563eb 0%, transparent 55%),
+                  radial-gradient(900px 700px at 50% 90%, #0ea5e9 0%, transparent 60%),
+                  #060818;
       overflow:hidden;
-      background:#0b0f19;
     }
-    .bg{
-      position:fixed;
-      inset:-40%;
-      background:
-        radial-gradient(circle at 20% 30%, rgba(124,58,237,.55), transparent 45%),
-        radial-gradient(circle at 80% 40%, rgba(16,185,129,.45), transparent 45%),
-        radial-gradient(circle at 50% 80%, rgba(59,130,246,.45), transparent 50%);
-      filter: blur(30px);
-      animation: floaty 10s ease-in-out infinite alternate;
-      transform: translate3d(0,0,0);
-      z-index:-2;
+    .bg-orb{
+      position:absolute; width:520px; height:520px; border-radius:50%;
+      filter: blur(60px); opacity:.35; animation: float 10s ease-in-out infinite;
+      background: linear-gradient(135deg,#a855f7,#22d3ee);
+      top:-120px; left:-120px;
     }
-    @keyframes floaty{
-      0%   { transform: translate(-2%, -2%) scale(1.05); }
-      100% { transform: translate(2%, 2%) scale(1.12); }
+    .bg-orb:nth-child(2){ width:420px;height:420px; top:auto; left:auto; right:-120px; bottom:-120px;
+      background: linear-gradient(135deg,#60a5fa,#f472b6); animation-duration: 12s;
     }
-    .grid{
-      position:fixed;
-      inset:0;
-      background:
-        linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
-      background-size: 48px 48px;
-      opacity:.18;
-      mask-image: radial-gradient(circle at center, black 45%, transparent 70%);
-      animation: drift 16s linear infinite;
-      z-index:-1;
-    }
-    @keyframes drift{
-      from { background-position: 0 0, 0 0; }
-      to   { background-position: 200px 0, 0 200px; }
-    }
+    @keyframes float{ 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(25px,18px) scale(1.05)} }
     .card{
-      width:min(560px, 92vw);
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 18px;
-      padding: 22px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.45);
+      width:min(920px,92vw);
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius:24px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+      padding:26px;
       backdrop-filter: blur(10px);
+      position:relative;
     }
-    h1{ margin:0 0 6px 0; font-size: 22px; }
-    p.sub{ margin:0 0 16px 0; color: rgba(255,255,255,.8); font-size: 13px; line-height:1.4; }
-    label{ display:block; font-size: 12px; margin: 12px 0 6px; color: rgba(255,255,255,.85); }
-    input{
-      width:100%;
-      padding: 12px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(10,14,25,.55);
+    h1{margin:0 0 6px;font-size:32px;}
+    p{margin:0 0 18px;opacity:.9}
+    .grid{display:grid;gap:14px;grid-template-columns:1fr 1fr;}
+    .grid3{display:grid;gap:14px;grid-template-columns:1fr 1fr 1fr;}
+    label{font-size:13px;opacity:.9;margin-bottom:6px;display:block}
+    input, .file{
+      width:100%; padding:12px 14px; border-radius:14px; outline:none;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(3,7,18,.35);
       color:#fff;
-      outline:none;
     }
-    input:focus{
-      border-color: rgba(124,58,237,.65);
-      box-shadow: 0 0 0 4px rgba(124,58,237,.18);
+    .file{padding:10px}
+    .btn{
+      margin-top:14px; width:100%;
+      padding:14px 16px; border-radius:14px; border:0;
+      color:white; font-weight:700; cursor:pointer;
+      background: linear-gradient(90deg,#7c3aed,#2563eb);
     }
-    .row{ display:flex; gap:10px; }
-    .row > div{ flex:1; }
-
-    button{
-      width:100%;
-      margin-top: 16px;
-      padding: 12px 14px;
-      border:0;
-      border-radius: 12px;
-      background: linear-gradient(90deg, rgba(124,58,237,.95), rgba(59,130,246,.95));
-      color:#fff;
-      font-weight:600;
-      cursor:pointer;
-      transition: transform .08s ease, filter .2s ease;
-    }
-    button:hover{ filter: brightness(1.05); }
-    button:active{ transform: scale(.99); }
-
     .msg{
-      margin-top: 12px;
-      font-size: 13px;
-      color: rgba(255,255,255,.92);
-      padding: 10px 12px;
-      border-radius: 12px;
+      margin-top:14px; padding:12px 14px; border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
       background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.12);
-      word-wrap: break-word;
+      white-space:pre-wrap;
     }
-    a{
-      color: #a5b4fc;
-      text-decoration: underline;
-    }
-    .hint{
-      margin-top:10px;
-      font-size:12px;
-      color: rgba(255,255,255,.7);
-    }
+    a{color:#93c5fd}
+    .note{margin-top:12px;opacity:.85;font-size:13px}
   </style>
 </head>
 <body>
-  <div class="bg"></div>
-  <div class="grid"></div>
+  <div class="bg-orb"></div><div class="bg-orb"></div>
 
   <div class="card">
     <h1>Mashup Generator</h1>
-    <p class="sub">Generate mashup and get a download link. Email is optional (only works if SendGrid is configured).</p>
+    <p>Upload audio files (mp3/wav/m4a). We’ll cut first <b>y</b> seconds from each and merge → download.</p>
 
-    <form method="POST">
-      <label>Singer Name</label>
-      <input name="singer" placeholder='e.g., Sharry Maan' required>
-
-      <div class="row">
-        <div>
-          <label>Number of Videos (n)</label>
-          <input type="number" name="n" min="1" max="30" value="5" required>
-        </div>
+    <form method="POST" enctype="multipart/form-data">
+      <div class="grid3">
         <div>
           <label>Seconds from each (y)</label>
-          <input type="number" name="y" min="5" max="90" value="20" required>
+          <input name="y" type="number" min="1" max="120" value="20" required />
+        </div>
+        <div>
+          <label>Output filename</label>
+          <input name="outname" placeholder="102303184-output.mp3" value="102303184-output.mp3" />
+        </div>
+        <div>
+          <label>Email (optional)</label>
+          <input name="email" type="email" placeholder="you@example.com" />
         </div>
       </div>
 
-      <label>Email (optional)</label>
-      <input type="email" name="email" placeholder="you@example.com">
+      <div style="margin-top:14px">
+        <label>Upload audio files (select multiple)</label>
+        <input class="file" type="file" name="files" accept="audio/*" multiple required />
+      </div>
 
-      <button type="submit">Generate</button>
+      <button class="btn" type="submit">Generate</button>
     </form>
 
-    {% if message %}
+    {% if error %}
+      <div class="msg">Error: {{ error }}</div>
+    {% endif %}
+    {% if download_url %}
       <div class="msg">
-        {{ message }}
-        {% if download_url %}
-          <br><br>
-          <b>Download:</b> <a href="{{ download_url }}" target="_blank">{{ download_url }}</a>
-        {% endif %}
+        ✅ Done! Download: <a href="{{ download_url }}">Click here</a>
       </div>
     {% endif %}
 
-    <div class="hint">
-      Free Render may sleep. First request can take 30–60 seconds. Keep n small (like 5–10) for free plan.
+    <div class="note">
+      Render Free may sleep; first request can take 30–60 seconds.
+      Keep files small (few files) for free plan.
     </div>
   </div>
 </body>
