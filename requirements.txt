@@ -1,8 +1,5 @@
-Flask==3.0.2
-gunicorn==21.2.0
-
+Flask==3.0.3
+gunicorn==22.0.0
 yt-dlp==2026.2.4
 pydub==0.25.1
-
 sendgrid==6.11.0
-email-validator==2.1.1
