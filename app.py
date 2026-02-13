@@ -1,50 +1,60 @@
 import os
+import threading
+
 from flask import Flask, render_template, request
 from email_validator import validate_email, EmailNotValidError
-from redis import Redis
-from rq import Queue
 
 from tasks import create_mashup_and_email
 
 app = Flask(__name__)
 
-redis_url = os.environ.get("REDIS_URL")
-if not redis_url:
-    raise RuntimeError("REDIS_URL not set in environment variables")
-
-q = Queue(connection=Redis.from_url(redis_url))
-
-
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def index():
+    msg = ""
+    error = ""
+
     if request.method == "POST":
-        singer = request.form.get("singer","").strip()
-        n = request.form.get("n","").strip()
-        y = request.form.get("y","").strip()
-        email = request.form.get("email","").strip()
+        singer = request.form.get("singer", "").strip()
+        n = request.form.get("n", "").strip()
+        y = request.form.get("y", "").strip()
+        email = request.form.get("email", "").strip()
+
+        # ---- validations ----
+        if not singer:
+            error = "Singer name is required."
+            return render_template("index.html", msg=msg, error=error)
+
+        try:
+            n_int = int(n)
+            y_int = int(y)
+            if n_int < 1:
+                raise ValueError
+            if y_int < 1:
+                raise ValueError
+        except Exception:
+            error = "Please enter valid numbers. (#videos >= 1, duration >= 1 sec)"
+            return render_template("index.html", msg=msg, error=error)
 
         try:
             validate_email(email)
         except EmailNotValidError:
-            return render_template("index.html", msg="Invalid email.")
+            error = "Invalid Email ID. Please enter a correct email."
+            return render_template("index.html", msg=msg, error=error)
 
-        if not singer:
-            return render_template("index.html", msg="Singer name cannot be empty.")
+        # ---- run task in background thread (FREE, no worker needed) ----
+        t = threading.Thread(
+            target=create_mashup_and_email,
+            args=(singer, n_int, y_int, email),
+            daemon=True
+        )
+        t.start()
 
-        try:
-            n = int(n); y = int(y)
-        except:
-            return render_template("index.html", msg="N and Y must be integers.")
+        msg = "✅ Request received! Your mashup is being prepared and will be emailed as a ZIP file."
+        return render_template("index.html", msg=msg, error="")
 
-        if n <= 10:
-            return render_template("index.html", msg="N must be > 10.")
-        if y <= 20:
-            return render_template("index.html", msg="Y must be > 20 seconds.")
+    return render_template("index.html", msg=msg, error=error)
 
-        job = q.enqueue(create_mashup_and_email, singer, n, y, email)
-        return render_template("index.html", msg=f"Submitted ✅ Job ID: {job.id}. Check email soon.")
-
-    return render_template("index.html", msg=None)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # For local run only
+    app.run(host="0.0.0.0", port=5000, debug=True)

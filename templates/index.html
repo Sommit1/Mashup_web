@@ -1,24 +1,43 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Mashup Generator</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <title>Mashup Web Service</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    .box { max-width: 520px; padding: 20px; border: 1px solid #ddd; border-radius: 10px; }
+    input { width: 100%; padding: 10px; margin: 8px 0; }
+    button { padding: 10px 16px; cursor: pointer; }
+    .msg { color: green; margin-top: 10px; }
+    .err { color: red; margin-top: 10px; }
+  </style>
+</head>
 <body>
-  <h2>Mashup Generator</h2>
-  {% if msg %}<p><b>{{ msg }}</b></p>{% endif %}
+  <div class="box">
+    <h2>Mashup Service</h2>
+    <form method="POST">
+      <label>Singer Name</label>
+      <input name="singer" placeholder="Sharry Maan" required />
 
-  <form method="post">
-    <label>Singer Name</label><br>
-    <input name="singer" required><br><br>
+      <label># of videos</label>
+      <input name="n" type="number" min="1" placeholder="10" required />
 
-    <label># of videos (N > 10)</label><br>
-    <input type="number" name="n" min="11" required><br><br>
+      <label>Duration of each (seconds)</label>
+      <input name="y" type="number" min="1" placeholder="20" required />
 
-    <label>Duration (Y > 20 sec)</label><br>
-    <input type="number" name="y" min="21" required><br><br>
+      <label>Email ID</label>
+      <input name="email" type="email" placeholder="abc@gmail.com" required />
 
-    <label>Email</label><br>
-    <input type="email" name="email" required><br><br>
+      <button type="submit">Submit</button>
+    </form>
 
-    <button type="submit">Submit</button>
-  </form>
+    {% if msg %}
+      <div class="msg">{{ msg }}</div>
+    {% endif %}
+
+    {% if error %}
+      <div class="err">{{ error }}</div>
+    {% endif %}
+  </div>
 </body>
 </html>
